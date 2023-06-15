@@ -23,6 +23,80 @@
 #
 """
 Timestamp Preserving Output File Writer.
+
+``outputfile.open_`` behaves identical to ``open(..., mode="w")``:
+
+>>> from outputfile import open_
+>>> from pathlib import Path
+>>> filepath = Path('file.txt')
+>>> with open_(filepath) as file:
+...     file.write("foo")
+
+but the timestamp stays the same, if the file content did not change:
+
+>>> mtime = filepath.stat().st_mtime
+>>> with open_(filepath) as file:
+...     file.write("foo")
+>>> mtime - filepath.stat().st_mtime
+0.0
+
+
+The ``state`` attribute details the file handling status:
+
+>>> otherpath = Path('other.txt')
+>>> # first write
+>>> with open_(otherpath) as file:
+...     file.write("foo")
+>>> file.state.name
+'CREATED'
+>>> # same write
+>>> with open_(otherpath) as file:
+...     file.write("foo")
+>>> file.state.name
+'IDENTICAL'
+>>> # other write
+>>> with open_(otherpath) as file:
+...     file.write("bar")
+>>> file.state.name
+'UPDATED'
+
+The argument ``existing`` defines the update strategy and can ``Existing.KEEP`` ...
+
+>>> keep = Path('keep.txt')
+>>> # first write
+>>> with open_(keep, existing=Existing.KEEP) as file:
+...     file.write("foo")
+>>> file.state.name
+'CREATED'
+>>> # same write
+>>> with open_(keep, existing=Existing.KEEP) as file:
+...     file.write("foo")
+>>> file.state.name
+'EXISTING'
+>>> # other write
+>>> with open_(keep, existing=Existing.KEEP) as file:
+...     file.write("bar")
+>>> file.state.name
+'EXISTING'
+
+... or ``Existing.OVERWRITE``
+
+>>> overwrite = Path('overwrite.txt')
+>>> # first write
+>>> with open_(overwrite, existing=Existing.OVERWRITE) as file:
+...     file.write("foo")
+>>> file.state.name
+'CREATED'
+>>> # same write
+>>> with open_(overwrite, existing=Existing.OVERWRITE) as file:
+...     file.write("foo")
+>>> file.state.name
+'OVERWRITTEN'
+>>> # other write
+>>> with open_(overwrite, existing=Existing.OVERWRITE) as file:
+...     file.write("bar")
+>>> file.state.name
+'OVERWRITTEN'
 """
 import difflib
 import filecmp
@@ -85,7 +159,7 @@ def open_(
     Keyword Args:
         existing (Existing, str): Handling of existing output files:
 
-            * :any:`Existing.ERROR`: raise an :any:`FileExistsError` if the file exists already.
+            * :any:`Existing.ERROR`: raise an ``FileExistsError``open` if the file exists already.
             * :any:`Existing.KEEP`: continue, without modifying the existing file.
             * :any:`Existing.OVERWRITE`: always overwrite the output file, like python's
               :any:`open` would do.
@@ -100,27 +174,6 @@ def open_(
 
     Any keyword argument is simply bypassed to the "open" function,
     except "mode", which is forced to "w".
-
-    By default `open_(filepath)` behaves like `open(filepath, "w")`:
-
-        >>> out = open_("file.txt")
-        >>> out.write("foo")
-        >>> out.close()
-        >>> out.state
-        <State.CREATED: 'CREATED.'>
-
-    But on writing the same content, the timestamp is kept:
-
-        >>> out = open_("file.txt")
-        >>> out.write("foo")
-        >>> out.close()
-        >>> out.state
-        <State.IDENTICAL: 'identical. untouched.'>
-
-    The context statement is also supported. The file is closed on exit of the context.
-
-        >>> with open_("file.txt") as out:
-        ...     out.write("foo")
     """
     return OutputFile(filepath, existing=existing, mkdir=mkdir, diffout=diffout, kwargs=kwargs)
 
@@ -229,6 +282,7 @@ class OutputFile:
         if self.__open_state:
             diff = None
             if self.existing == Existing.KEEP_TIMESTAMP:
+                self.__handle.flush()
                 self.__handle.close()
                 if self.__state != State.FAILED:
                     is_modified = _is_modified(self.filepath, self.__tmp_filepath)
@@ -244,8 +298,9 @@ class OutputFile:
                 self.__tmp_filepath.unlink()
                 self.__tmp_filepath = None
             elif self.__handle:
+                self.__handle.flush()
                 self.__handle.close()
-                if self.__state != State.FAILED:
+                if self.__state != State.FAILED:  # pragma: no cover
                     if self.__file_exists:
                         self.__state = State.OVERWRITTEN
                     else:
@@ -261,7 +316,7 @@ class OutputFile:
 def _is_modified(path0, path1):
     if not path0.exists() or not path1.exists():
         return None
-    return not filecmp.cmp(path0, path1)
+    return not filecmp.cmp(path0, path1, shallow=False)
 
 
 def _get_diff(filepath0, filepath1):

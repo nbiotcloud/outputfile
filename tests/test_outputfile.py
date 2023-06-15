@@ -26,9 +26,11 @@
 import re
 import time
 
-from pytest import fixture, raises
+from pytest import approx, fixture, raises
 
 from outputfile import Existing, State, open_
+
+from .util import chdir
 
 SLEEP = 0.2
 WORLD = """
@@ -38,6 +40,12 @@ MARS = """
 Hello Mars.
 """
 # pylint: disable=redefined-outer-name
+
+
+def cmp_mtime(mtime0, mtime1):
+    """Compare Modification Times"""
+    # Hack, to resolve floating round issue
+    return abs(mtime1 - mtime0) == approx(0)
 
 
 @fixture
@@ -82,7 +90,7 @@ def test_no_update(filepath):
 
         with open_(filepath, diffout=diffout) as file:
             file.write(WORLD)
-        assert mtime == filepath.stat().st_mtime
+        assert cmp_mtime(mtime, filepath.stat().st_mtime)
         assert filepath.read_text() == WORLD
         assert file.state == State.IDENTICAL
         assert not changes
@@ -108,7 +116,7 @@ def test_update(filepath):
     # Second Write
     with open_(filepath, diffout=diffout) as file:
         file.write(MARS)
-    assert mtime != filepath.stat().st_mtime
+    assert not cmp_mtime(mtime, filepath.stat().st_mtime)
     assert filepath.read_text() == MARS
     assert file.state == State.UPDATED
     assert changes == ["--- \n+++ \n@@ -1,2 +1,2 @@\n \n-Hello World.\n+Hello Mars.\n"]
@@ -119,10 +127,29 @@ def test_update(filepath):
     # Third Write
     with open_(filepath, diffout=diffout) as file:
         file.write(WORLD)
-    assert mtime != filepath.stat().st_mtime
+    assert not cmp_mtime(mtime, filepath.stat().st_mtime)
     assert filepath.read_text() == WORLD
     assert file.state == State.UPDATED
     assert changes == ["--- \n+++ \n@@ -1,2 +1,2 @@\n \n-Hello Mars.\n+Hello World.\n"]
+
+
+def test_update_singleline(filepath):
+    """Content without newline and fast."""
+    with open_(filepath) as file:
+        file.write("foo")
+    assert file.state == State.CREATED
+    assert filepath.read_text() == "foo"
+
+    with open_(filepath) as file:
+        file.write("foo")
+    assert file.state == State.IDENTICAL
+    assert filepath.read_text() == "foo"
+
+    with open_(filepath) as file:
+        file.write("barz")
+        file.flush()
+    assert file.state == State.UPDATED
+    assert filepath.read_text() == "barz"
 
 
 class MyException(RuntimeError):
@@ -148,7 +175,7 @@ def test_exception(filepath):
             raise MyException()
     except MyException:
         pass
-    assert mtime == filepath.stat().st_mtime
+    assert cmp_mtime(mtime, filepath.stat().st_mtime)
     assert filepath.read_text() == WORLD
     assert file.state == State.FAILED
 
@@ -236,7 +263,7 @@ def test_existing_overwrite(filepath):
     # Second Write
     with open_(filepath, existing=Existing.OVERWRITE) as file:
         file.write(WORLD)
-    assert mtime != filepath.stat().st_mtime
+    assert not cmp_mtime(mtime, filepath.stat().st_mtime)
     assert filepath.read_text() == WORLD
     assert file.state == State.OVERWRITTEN
 
@@ -244,8 +271,9 @@ def test_existing_overwrite(filepath):
 def test_existing_overwrite_str(filepath):
     """existing='overwrite'."""
     # First Write
-    with open_(filepath, existing="overwrite") as file:
-        file.write(WORLD)
+    with chdir(filepath.parent):
+        with open_(filepath.name, existing="overwrite") as file:
+            file.write(WORLD)
     mtime = filepath.stat().st_mtime
     assert filepath.read_text() == WORLD
     assert file.state == State.CREATED
@@ -255,7 +283,7 @@ def test_existing_overwrite_str(filepath):
     # Second Write
     with open_(filepath, existing=Existing.OVERWRITE) as file:
         file.write(WORLD)
-    assert mtime != filepath.stat().st_mtime
+    assert not cmp_mtime(mtime, filepath.stat().st_mtime)
     assert filepath.read_text() == WORLD
     assert file.state == State.OVERWRITTEN
 

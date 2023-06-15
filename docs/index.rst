@@ -1,17 +1,7 @@
-Timestamp Preserving Output File Writer
-=======================================
-
-TODO
-
-.. toctree::
-   :maxdepth: 1
-
-   api/outputfile
-
-
-Indices and tables
+outputfile package
 ==================
 
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+.. automodule:: outputfile
+   :members:
+   :undoc-members:
+   :show-inheritance:
