@@ -8,4 +8,7 @@
 
 # Timestamp Preserving Output File Writer
 
-TODO
+* [Documentation](https://outputfile.readthedocs.io/en/latest/)
+* [PyPI](https://pypi.org/project/outputfile/)
+* [Sources](https://github.com/nbiotcloud/outputfile)
+* [Issues](https://github.com/nbiotcloud/outputfile/issues)
