@@ -112,7 +112,7 @@ __all__ = ["Existing", "State", "open_", "OutputFile"]
 
 class Existing(Enum):
 
-    """Handling of existing output files."""
+    """Strategy for Handling of existing files."""
 
     ERROR = "error"
     KEEP = "keep"
