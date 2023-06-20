@@ -12,3 +12,11 @@
 * [PyPI](https://pypi.org/project/outputfile/)
 * [Sources](https://github.com/nbiotcloud/outputfile)
 * [Issues](https://github.com/nbiotcloud/outputfile/issues)
+
+## Installation
+
+Installing it is pretty easy:
+
+```bash
+pip install outputfile
+```
