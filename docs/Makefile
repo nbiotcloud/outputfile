@@ -25,6 +25,5 @@ quick-html: api Makefile
 	@$(SPHINXBUILD) -M html "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
 api:
-	sphinx-apidoc --output-dir . .. ../outputfile/cli ../docs ../tests $(wildcard ../*.py) $(APIOPTS)
-	mv outputfile.rst index.rst
+	sphinx-apidoc --output-dir api .. ../outputfile/cli ../docs ../tests $(wildcard ../*.py) $(APIOPTS)
 .PHONY: api
