@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "outputfile"
-version = "0.2.1"
+version = "1.0.0"
 description = "Timestamp Preserving Output File Writer"
 readme = "README.md"
 license = "MIT"
