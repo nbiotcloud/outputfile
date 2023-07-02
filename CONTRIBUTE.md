@@ -1,5 +1,7 @@
 # Contribute
 
+This project uses https://github.com/nbiotcloud/python-template 1.0.0
+
 ## Testing
 
 ### Create Environment
@@ -47,7 +49,5 @@ git tag "${version}" -m "Release ${version}"
 git push
 git push --tags
 
-# Publish on pypi
-poetry publish --build
+# Publishing is handled by CI
 ```
-
