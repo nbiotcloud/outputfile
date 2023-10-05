@@ -26,7 +26,7 @@
 import re
 import time
 
-from pytest import approx, fixture, raises
+from pytest import approx, fixture, mark, raises
 
 from outputfile import Existing, State, open_
 
@@ -152,13 +152,17 @@ def test_update_singleline(filepath):
     assert filepath.read_text() == "barz"
 
 
-class MyException(RuntimeError):
+class MyException(Exception):
     """Dummy Exception."""
 
 
-def test_exception(filepath):
+@mark.parametrize("existing", [Existing.KEEP_TIMESTAMP, Existing.KEEP])
+def test_exception(filepath, existing):
     """An incomplete file caused by an exception, has to be ignored."""
-
+    state = {
+        Existing.KEEP_TIMESTAMP: State.FAILED,
+        Existing.KEEP: State.EXISTING,
+    }[existing]
     # First Write
     with open_(filepath) as file:
         file.write(WORLD)
@@ -170,14 +174,14 @@ def test_exception(filepath):
 
     # Second Write
     try:
-        with open_(filepath) as file:
+        with open_(filepath, existing=existing) as file:
             file.write(MARS)
             raise MyException()
     except MyException:
         pass
-    assert cmp_mtime(mtime, filepath.stat().st_mtime)
     assert filepath.read_text() == WORLD
-    assert file.state == State.FAILED
+    assert cmp_mtime(mtime, filepath.stat().st_mtime)
+    assert file.state == state
 
 
 def test_close(filepath):
