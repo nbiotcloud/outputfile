@@ -1,7 +1,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2023 nbiotcloud
+# Copyright (c) 2023-2025 nbiotcloud
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -26,92 +26,95 @@ Timestamp Preserving Output File Writer.
 
 ``outputfile.open_`` behaves identical to ``open(..., mode="w")``:
 
->>> from outputfile import open_
->>> from pathlib import Path
->>> filepath = Path('file.txt')
->>> with open_(filepath) as file:
-...     file.write("foo")
+    >>> from outputfile import open_
+    >>> from pathlib import Path
+    >>> filepath = Path('file.txt')
+    >>> with open_(filepath) as file:
+    ...     file.write("foo")
 
 but the timestamp stays the same, if the file content did not change:
 
->>> mtime = filepath.stat().st_mtime
->>> with open_(filepath) as file:
-...     file.write("foo")
->>> mtime - filepath.stat().st_mtime
-0.0
+    >>> mtime = filepath.stat().st_mtime
+    >>> with open_(filepath) as file:
+    ...     file.write("foo")
+    >>> mtime - filepath.stat().st_mtime
+    0.0
 
 
 The ``state`` attribute details the file handling status:
 
->>> otherpath = Path('other.txt')
->>> # first write
->>> with open_(otherpath) as file:
-...     file.write("foo")
->>> file.state.name
-'CREATED'
->>> # same write
->>> with open_(otherpath) as file:
-...     file.write("foo")
->>> file.state.name
-'IDENTICAL'
->>> # other write
->>> with open_(otherpath) as file:
-...     file.write("bar")
->>> file.state.name
-'UPDATED'
+    >>> otherpath = Path('other.txt')
+    >>> # first write
+    >>> with open_(otherpath) as file:
+    ...     file.write("foo")
+    >>> file.state.name
+    'CREATED'
+    >>> # same write
+    >>> with open_(otherpath) as file:
+    ...     file.write("foo")
+    >>> file.state.name
+    'IDENTICAL'
+    >>> # other write
+    >>> with open_(otherpath) as file:
+    ...     file.write("bar")
+    >>> file.state.name
+    'UPDATED'
 
 The argument ``existing`` defines the update strategy and can ``Existing.KEEP`` ...
 
->>> keep = Path('keep.txt')
->>> # first write
->>> with open_(keep, existing=Existing.KEEP) as file:
-...     file.write("foo")
->>> file.state.name
-'CREATED'
->>> # same write
->>> with open_(keep, existing=Existing.KEEP) as file:
-...     file.write("foo")
->>> file.state.name
-'EXISTING'
->>> # other write
->>> with open_(keep, existing=Existing.KEEP) as file:
-...     file.write("bar")
->>> file.state.name
-'EXISTING'
+    >>> keep = Path('keep.txt')
+    >>> # first write
+    >>> with open_(keep, existing=Existing.KEEP) as file:
+    ...     file.write("foo")
+    >>> file.state.name
+    'CREATED'
+    >>> # same write
+    >>> with open_(keep, existing=Existing.KEEP) as file:
+    ...     file.write("foo")
+    >>> file.state.name
+    'EXISTING'
+    >>> # other write
+    >>> with open_(keep, existing=Existing.KEEP) as file:
+    ...     file.write("bar")
+    >>> file.state.name
+    'EXISTING'
 
 ... or ``Existing.OVERWRITE``
 
->>> overwrite = Path('overwrite.txt')
->>> # first write
->>> with open_(overwrite, existing=Existing.OVERWRITE) as file:
-...     file.write("foo")
->>> file.state.name
-'CREATED'
->>> # same write
->>> with open_(overwrite, existing=Existing.OVERWRITE) as file:
-...     file.write("foo")
->>> file.state.name
-'OVERWRITTEN'
->>> # other write
->>> with open_(overwrite, existing=Existing.OVERWRITE) as file:
-...     file.write("bar")
->>> file.state.name
-'OVERWRITTEN'
+    >>> overwrite = Path('overwrite.txt')
+    >>> # first write
+    >>> with open_(overwrite, existing=Existing.OVERWRITE) as file:
+    ...     file.write("foo")
+    >>> file.state.name
+    'CREATED'
+    >>> # same write
+    >>> with open_(overwrite, existing=Existing.OVERWRITE) as file:
+    ...     file.write("foo")
+    >>> file.state.name
+    'OVERWRITTEN'
+    >>> # other write
+    >>> with open_(overwrite, existing=Existing.OVERWRITE) as file:
+    ...     file.write("bar")
+    >>> file.state.name
+    'OVERWRITTEN'
 """
+
 import difflib
 import filecmp
 import tempfile
+from collections.abc import Callable
 from enum import Enum
 from os import fdopen as _fdopen
 from pathlib import Path
 from shutil import copyfile
-from typing import Union
+from typing import TypeAlias
 
-__all__ = ["Existing", "State", "open_", "OutputFile"]
+Diffout: TypeAlias = Callable[[str], None]
+
+__all__ = ["Existing", "OutputFile", "State", "open_"]
 
 
 class Existing(Enum):
-
     """Strategy for Handling of existing files."""
 
     ERROR = "error"
@@ -121,7 +124,6 @@ class Existing(Enum):
 
 
 class State(Enum):
-
     """File state."""
 
     OPEN = "OPEN"
@@ -133,11 +135,11 @@ class State(Enum):
     FAILED = "FAILED."
 
 
-def open_(
-    filepath: Union[Path, str],
-    existing: Union[Existing, str] = Existing.KEEP_TIMESTAMP,
+def open_(  # noqa: D417
+    filepath: Path | str,
+    existing: Existing | str = Existing.KEEP_TIMESTAMP,
     mkdir: bool = False,
-    diffout=None,
+    diffout: Diffout | None = None,
     **kwargs,
 ):
     """
@@ -145,10 +147,12 @@ def open_(
 
     By default, the filesystem timestamp of a written file is always
     updated on write, also when the final file content is identical to the
-    overwritten version. The :any:`OutputFile` class works around this rule.
+    overwritten version. The
+    [`OutputFile`][outputfile.OutputFile] class works around this rule.
 
-    The :any:`OutputFile` class behaves like a normal file in write ('w') mode,
-    but the output is written to a temporary file. On :any:`close()` the temporary
+    The
+    [`OutputFile`][outputfile.OutputFile] class behaves like a normal file in write ('w') mode,
+    but the output is written to a temporary file. On `close()` the temporary
     file and the target file are compared. If both files are identical, the
     temporary file is removed. If they differ, the temporary file is moved
     to the target file location.
@@ -159,21 +163,22 @@ def open_(
     Keyword Args:
         existing (Existing, str): Handling of existing output files:
 
-            * :any:`Existing.ERROR`: raise an ``FileExistsError``open` if the file exists already.
-            * :any:`Existing.KEEP`: continue, without modifying the existing file.
-            * :any:`Existing.OVERWRITE`: always overwrite the output file, like python's
-              :any:`open` would do.
-            * :any:`Existing.KEEP_TIMESTAMP`: write to temporary file and move to target
-              file if content differs.
+            * [`Existing.ERROR`][outputfile.Existing]: raise an ``FileExistsError``open` if the file
+              exists already.
+            * [`Existing.KEEP`][outputfile.Existing]: continue, without modifying the existing file.
+            * [`Existing.OVERWRITE`][outputfile.Existing]: always overwrite the output file, like python's
+              `open` would do.
+            * [`Existing.KEEP_TIMESTAMP`][outputfile.Existing]: write to temporary file and move to
+              target file if content differs.
 
-        mkdir (bool): create the output directory if it not exists.
+        mkdir: create the output directory if it not exists.
         diffout: function receiving file diff on update.
 
     Raises:
         FileExistsError: if `existing="error"` and file exists already.
 
-    Any keyword argument is simply bypassed to the "open" function,
-    except "mode", which is forced to "w".
+    Any keyword argument is simply bypassed to the `open` function,
+    except `mode`, which is forced to `w`.
     """
     return OutputFile(filepath, existing=existing, mkdir=mkdir, diffout=diffout, kwargs=kwargs)
 
@@ -185,13 +190,13 @@ class OutputFile:
 
     def __init__(
         self,
-        filepath: Union[Path, str],
-        existing: Union[Existing, str] = Existing.KEEP_TIMESTAMP,
+        filepath: Path | str,
+        existing: Existing | str = Existing.KEEP_TIMESTAMP,
         mkdir: bool = False,
         diffout=None,
         kwargs=None,
     ) -> None:
-        """File object returned by :any:`open_`."""
+        """File object returned by `open_`."""
         super().__init__()
         if isinstance(filepath, str):
             filepath = Path(filepath)
@@ -219,11 +224,8 @@ class OutputFile:
 
         See :py:meth:`io.TextIOBase.write` for reference.
 
-        Returns:
-            None
         Raises:
             ValueError: when the file is already closed.
-
         """
         if self.__handle:
             self.__handle.write(*args, **kwargs)
@@ -273,7 +275,7 @@ class OutputFile:
             self.__handle = _fdopen(file, "w", **opts)
         elif not self.__file_exists or existing != Existing.KEEP:
             # pylint: disable=consider-using-with,unspecified-encoding
-            self.__handle = open(filepath, "w", **opts)
+            self.__handle = open(filepath, "w", **opts)  # noqa: PTH123
         self.__open_state = True
         self.__state = State.OPEN
 
@@ -320,8 +322,8 @@ def _is_modified(path0, path1):
 
 
 def _get_diff(filepath0, filepath1):
-    with open(filepath0, encoding="utf-8") as handle0:
-        with open(filepath1, encoding="utf-8") as handle1:
+    with open(filepath0, encoding="utf-8") as handle0:  # noqa: PTH123
+        with open(filepath1, encoding="utf-8") as handle1:  # noqa: PTH123
             content0 = handle0.readlines()
             content1 = handle1.readlines()
     diff = difflib.unified_diff(content0, content1)

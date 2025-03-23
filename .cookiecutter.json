@@ -1,0 +1,13 @@
+{
+    "cookiecutter": {
+    "_checkout": null,
+    "_output_dir": "/Users/iccode17/projects",
+    "_repo_dir": "python-template",
+    "_template": "python-template",
+    "name": "outputfile",
+    "snake_name": "outputfile",
+    "title": "Timestamp Preserving Output File Writer",
+    "user": "nbiotcloud",
+    "year": "2023"
+}
+}
