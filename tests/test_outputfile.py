@@ -1,7 +1,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2023 nbiotcloud
+# Copyright (c) 2023-2025 nbiotcloud
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -26,11 +26,10 @@
 import re
 import time
 
+from contextlib_chdir import chdir
 from pytest import approx, fixture, mark, raises
 
 from outputfile import Existing, State, open_
-
-from .util import chdir
 
 SLEEP = 0.2
 WORLD = """
@@ -43,7 +42,7 @@ Hello Mars.
 
 
 def cmp_mtime(mtime0, mtime1):
-    """Compare Modification Times"""
+    """Compare Modification Times."""
     # Hack, to resolve floating round issue
     return abs(mtime1 - mtime0) == approx(0)
 
@@ -152,7 +151,7 @@ def test_update_singleline(filepath):
     assert filepath.read_text() == "barz"
 
 
-class MyException(Exception):
+class MyException(Exception):  # noqa: N818
     """Dummy Exception."""
 
 
@@ -176,7 +175,7 @@ def test_exception(filepath, existing):
     try:
         with open_(filepath, existing=existing) as file:
             file.write(MARS)
-            raise MyException()
+            raise MyException
     except MyException:
         pass
     assert filepath.read_text() == WORLD
@@ -214,7 +213,6 @@ def test_write_closed(filepath):
 
 def test_mkdir(subfilepath):
     """Create output directory."""
-
     match = re.escape(f"Output directory '{subfilepath.parent}' does not exists.")
     with raises(FileNotFoundError, match=match):
         open_(subfilepath)
