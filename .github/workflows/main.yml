@@ -50,15 +50,26 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # publish:
+  #   if: github.event_name == 'push' && github.ref_type == 'tag'
+  #   needs: coveralls
+  #   name: upload release to PyPI
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     id-token: write
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: pdm-project/setup-pdm@v4
+  #     - name: Publish package distributions to PyPI
+  #       run: pdm publish
+
   publish:
     if: github.event_name == 'push' && github.ref_type == 'tag'
     needs: coveralls
-    name: upload release to PyPI
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: pdm-project/setup-pdm@v4
-      - name: Publish package distributions to PyPI
-        run: pdm publish
+      - uses: actions/checkout@v3
+      - name: Build and publish to pypi
+        uses: JRubics/poetry-publish@v1.17
+        with:
+          pypi_token: ${{ secrets.PYPI_TOKEN }}
