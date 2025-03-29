@@ -158,7 +158,7 @@ ignore = [
     # Assert
     'S101',
     # Type-Checking
-    'TC001',
+    'TC001', 'TC003',
     # Indent of doctest
     'D412',
 ]
