@@ -38,7 +38,9 @@ Hello World.
 MARS = """
 Hello Mars.
 """
-# pylint: disable=redefined-outer-name
+LINE = "One-Line"
+
+BYTES = bytes(range(10))
 
 
 def cmp_mtime(mtime0, mtime1):
@@ -298,3 +300,37 @@ def test_flush(filepath):
     assert filepath.read_text() == WORLD
     file.flush()
     assert filepath.read_text() == WORLD
+
+
+@mark.parametrize("mode", ("", "w", "t"))
+def test_mode_text(filepath, mode):
+    """Mode Text."""
+    with open_(filepath, mode=mode) as file:
+        file.write(WORLD)
+    assert filepath.read_text() == WORLD
+
+
+@mark.parametrize("mode", ("b", "wb"))
+def test_mode_binary(filepath, mode):
+    """Mode Binary."""
+    with open_(filepath, mode=mode) as file:
+        file.write(BYTES)
+    assert filepath.read_bytes() == BYTES
+
+
+@mark.parametrize("mode", ("r", "a", "+"))
+def test_mode_invalid(filepath, mode):
+    """Invalid Mode."""
+    with raises(ValueError, match=re.escape(f"mode {mode!r} is not supported ({mode!r}).")):
+        with open_(filepath, mode=mode) as file:
+            file.write(WORLD)
+    assert not filepath.exists()
+
+
+@mark.parametrize("encoding", ("utf-8", "latin-1"))
+def test_encoding(filepath, encoding):
+    """Encoding."""
+    with open_(filepath, encoding=encoding) as file:
+        file.write(LINE)
+    assert filepath.read_text() == LINE
+    assert filepath.read_bytes() == LINE.encode(encoding)

@@ -107,7 +107,7 @@ from enum import Enum
 from os import fdopen as _fdopen
 from pathlib import Path
 from shutil import copyfile
-from typing import TypeAlias
+from typing import IO, Any, TypeAlias
 
 Diffout: TypeAlias = Callable[[str], None]
 
@@ -137,6 +137,7 @@ class State(Enum):
 
 def open_(  # noqa: D417
     filepath: Path | str,
+    mode: str = "w",
     existing: Existing | str = Existing.KEEP_TIMESTAMP,
     mkdir: bool = False,
     diffout: Diffout | None = None,
@@ -161,6 +162,7 @@ def open_(  # noqa: D417
         filepath (str): Path to the target file.
 
     Keyword Args:
+        mode: [Mode](https://docs.python.org/3/library/functions.html#open), except 'r', 'a' or '+'.
         existing (Existing, str): Handling of existing output files:
 
             * [`Existing.ERROR`][outputfile.Existing]: raise an ``FileExistsError``open` if the file
@@ -180,17 +182,16 @@ def open_(  # noqa: D417
     Any keyword argument is simply bypassed to the `open` function,
     except `mode`, which is forced to `w`.
     """
-    return OutputFile(filepath, existing=existing, mkdir=mkdir, diffout=diffout, kwargs=kwargs)
+    return OutputFile(filepath, mode=mode, existing=existing, mkdir=mkdir, diffout=diffout, kwargs=kwargs)
 
 
 class OutputFile:
     """File Object Wrapper."""
 
-    # pylint: disable=too-many-arguments,too-many-instance-attributes
-
     def __init__(
         self,
         filepath: Path | str,
+        mode: str = "w",
         existing: Existing | str = Existing.KEEP_TIMESTAMP,
         mkdir: bool = False,
         diffout=None,
@@ -202,23 +203,30 @@ class OutputFile:
             filepath = Path(filepath)
         if isinstance(existing, str):
             existing = Existing(existing)
+        mode = _norm_mode(mode)
         self.filepath = filepath
+        self.__mode = mode
         self.existing = existing
         self.mkdir = mkdir
         self.diffout = diffout
-        self.__handle = None
-        self.__open_state = False
-        self.__state = None
+        self.__handle: IO[Any] | None = None
+        self.__open_state: bool = False
+        self.__state = State.FAILED
         self.__file_exists = filepath.exists()
-        self.__tmp_filepath = None
+        self.__tmp_filepath: Path | None = None
         self.__open(kwargs or {})
 
     @property
-    def state(self):
+    def mode(self) -> str:
+        """Mode."""
+        return self.__mode
+
+    @property
+    def state(self) -> State:
         """State."""
         return self.__state
 
-    def write(self, *args, **kwargs):
+    def write(self, *args, **kwargs) -> None:
         """
         Write to file.
 
@@ -232,17 +240,17 @@ class OutputFile:
         elif not self.__open_state:
             raise ValueError("I/O Error. Write on closed file.")
 
-    def close(self):
+    def close(self) -> None:
         """Close the file."""
         self.__close()
 
-    def flush(self):
+    def flush(self) -> None:
         """Flush file content."""
         if self.__handle:
             self.__handle.flush()
 
     @property
-    def closed(self):
+    def closed(self) -> bool:
         """True, when the file has been closed and is not writable anymore."""
         return not self.__open_state
 
@@ -254,8 +262,11 @@ class OutputFile:
             self.__state = State.FAILED
         self.__close()
 
-    def __open(self, opts):
-        opts.setdefault("encoding", "utf-8")
+    def __open(self, opts) -> None:
+        mode = self.__mode
+        binary = "b" in mode
+        if not binary:
+            opts.setdefault("encoding", "utf-8")
         filepath = self.filepath
         existing = self.existing
         # Do not overwrite
@@ -272,37 +283,33 @@ class OutputFile:
         if existing == Existing.KEEP_TIMESTAMP:
             file, tmp_filepath = tempfile.mkstemp()
             self.__tmp_filepath = Path(tmp_filepath)
-            self.__handle = _fdopen(file, "w", **opts)
+            self.__handle = _fdopen(file, mode, **opts)
         elif not self.__file_exists or existing != Existing.KEEP:
-            # pylint: disable=consider-using-with,unspecified-encoding
-            self.__handle = open(filepath, "w", **opts)  # noqa: PTH123
+            self.__handle = open(filepath, mode, **opts)  # noqa: PTH123
         self.__open_state = True
         self.__state = State.OPEN
 
-    def __close(self):
-        # pylint: disable=too-many-branches
+    def __close(self) -> None:
         if self.__open_state:
             diff = None
-            if self.existing == Existing.KEEP_TIMESTAMP:
+            if self.__handle:
                 self.__handle.flush()
                 self.__handle.close()
-                if self.__state != State.FAILED:
-                    is_modified = _is_modified(self.filepath, self.__tmp_filepath)
-                    if self.diffout and is_modified is True:
-                        diff = _get_diff(self.filepath, self.__tmp_filepath)
-                    if is_modified is not False:
-                        copyfile(self.__tmp_filepath, self.filepath)
-                    self.__state = {
-                        True: State.UPDATED,
-                        False: State.IDENTICAL,
-                        None: State.CREATED,
-                    }[is_modified]
-                self.__tmp_filepath.unlink()
-                self.__tmp_filepath = None
-            elif self.__handle:
-                self.__handle.flush()
-                self.__handle.close()
-                if self.__state != State.FAILED:  # pragma: no cover
+                if self.existing == Existing.KEEP_TIMESTAMP and self.__tmp_filepath:
+                    if self.__state != State.FAILED:
+                        is_modified = _is_modified(self.filepath, self.__tmp_filepath)
+                        if self.diffout and is_modified is True:
+                            diff = _get_diff(self.filepath, self.__tmp_filepath)
+                        if is_modified is not False:
+                            copyfile(self.__tmp_filepath, self.filepath)
+                        self.__state = {
+                            True: State.UPDATED,
+                            False: State.IDENTICAL,
+                            None: State.CREATED,
+                        }[is_modified]
+                    self.__tmp_filepath.unlink()
+                    self.__tmp_filepath = None
+                elif self.__state != State.FAILED:  # pragma: no cover
                     if self.__file_exists:
                         self.__state = State.OVERWRITTEN
                     else:
@@ -315,13 +322,22 @@ class OutputFile:
         self.__open_state = False
 
 
-def _is_modified(path0, path1):
+def _norm_mode(mode: str) -> str:
+    for flag in "ra+":
+        if flag in mode:
+            raise ValueError(f"mode {flag!r} is not supported ({mode!r}).")
+    if "w" not in mode:
+        mode = f"w{mode}"
+    return mode
+
+
+def _is_modified(path0, path1) -> bool | None:
     if not path0.exists() or not path1.exists():
         return None
     return not filecmp.cmp(path0, path1, shallow=False)
 
 
-def _get_diff(filepath0, filepath1):
+def _get_diff(filepath0, filepath1) -> str:
     with open(filepath0, encoding="utf-8") as handle0:  # noqa: PTH123
         with open(filepath1, encoding="utf-8") as handle1:  # noqa: PTH123
             content0 = handle0.readlines()
