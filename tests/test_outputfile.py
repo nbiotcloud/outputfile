@@ -24,6 +24,7 @@
 """Testing."""
 
 import re
+import stat
 import time
 
 from contextlib_chdir import chdir
@@ -334,3 +335,13 @@ def test_encoding(filepath, encoding):
         file.write(LINE)
     assert filepath.read_text() == LINE
     assert filepath.read_bytes() == LINE.encode(encoding)
+
+
+@mark.parametrize("existing", ("keep_timestamp", "overwrite"))
+def test_permission_error(filepath, existing):
+    """Permission Error."""
+    filepath.touch()
+    filepath.chmod(filepath.stat().st_mode & ~stat.S_IWUSR & ~stat.S_IWGRP)
+    with raises(PermissionError):
+        with open_(filepath, existing=existing) as file:
+            file.write("test")
