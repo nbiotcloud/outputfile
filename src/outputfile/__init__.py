@@ -222,6 +222,11 @@ class OutputFile:
         return self.__mode
 
     @property
+    def is_binary(self) -> bool:
+        """Binary instead of Text Mode."""
+        return "b" in self.__mode
+
+    @property
     def state(self) -> State:
         """State."""
         return self.__state
@@ -264,8 +269,7 @@ class OutputFile:
 
     def __open(self, opts) -> None:
         mode = self.__mode
-        binary = "b" in mode
-        if not binary:
+        if not self.is_binary:
             opts.setdefault("encoding", "utf-8")
         filepath = self.filepath
         existing = self.existing
@@ -298,7 +302,7 @@ class OutputFile:
                 if self.existing == Existing.KEEP_TIMESTAMP and self.__tmp_filepath:
                     if self.__state != State.FAILED:
                         is_modified = _is_modified(self.filepath, self.__tmp_filepath)
-                        if self.diffout and is_modified is True:
+                        if not self.is_binary and self.diffout and is_modified is True:
                             diff = _get_diff(self.filepath, self.__tmp_filepath)
                         if is_modified is not False:
                             copyfile(self.__tmp_filepath, self.filepath)
