@@ -42,6 +42,7 @@ Hello Mars.
 LINE = "One-Line"
 
 BYTES = bytes(range(10))
+OTHERBYTES = bytes(range(15))
 
 
 def cmp_mtime(mtime0, mtime1):
@@ -304,19 +305,36 @@ def test_flush(filepath):
 
 
 @mark.parametrize("mode", ("", "w", "t"))
-def test_mode_text(filepath, mode):
+@mark.parametrize("diffout", (None, print))
+def test_mode_text(filepath, mode, diffout, capsys):
     """Mode Text."""
     with open_(filepath, mode=mode) as file:
         file.write(WORLD)
     assert filepath.read_text() == WORLD
+    assert file.state == State.CREATED
+    assert not capsys.readouterr().out
+    with open_(filepath, mode=mode, diffout=diffout) as file:
+        file.write(MARS)
+    assert filepath.read_text() == MARS
+    diff = "--- \n+++ \n@@ -1,2 +1,2 @@\n \n-Hello World.\n+Hello Mars.\n\n" if diffout else ""
+    assert capsys.readouterr().out == diff
+    assert file.state == State.UPDATED
 
 
 @mark.parametrize("mode", ("b", "wb"))
-def test_mode_binary(filepath, mode):
+@mark.parametrize("diffout", (None, print))
+def test_mode_binary(filepath, mode, diffout, capsys):
     """Mode Binary."""
     with open_(filepath, mode=mode) as file:
         file.write(BYTES)
     assert filepath.read_bytes() == BYTES
+    assert not capsys.readouterr().out
+    assert file.state == State.CREATED
+    with open_(filepath, mode=mode, diffout=diffout) as file:
+        file.write(OTHERBYTES)
+    assert filepath.read_bytes() == OTHERBYTES
+    assert not capsys.readouterr().out
+    assert file.state == State.UPDATED
 
 
 @mark.parametrize("mode", ("r", "a", "+"))
