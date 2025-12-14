@@ -63,6 +63,32 @@ def subfilepath(filepath):
     yield filepath.parent / "sub" / "file.txt"
 
 
+@fixture
+def tracker():
+    """Tracker."""
+    return []
+
+
+@fixture
+def pre(tracker):
+    """Pre."""
+
+    def func(filepath):
+        tracker.append(("pre", filepath))
+
+    return func
+
+
+@fixture
+def post(tracker):
+    """Post."""
+
+    def func(filepath):
+        tracker.append(("post", filepath))
+
+    return func
+
+
 def test_attrs(filepath):
     """OutputFile attributes."""
     with open_(filepath) as file:
@@ -202,6 +228,24 @@ def test_close(filepath):
     assert file.state == State.CREATED
 
 
+def test_close_pre_post(filepath, tracker, pre, post):
+    """Test OutputFile with explicit close()."""
+    file = open_(filepath, pre=pre, post=post)
+    assert tracker == []
+    file.write(WORLD)
+    assert file.state == State.OPEN
+    assert not file.closed
+    file.close()
+    assert tracker == [("pre", filepath), ("post", filepath)]
+    assert file.closed
+    assert file.state == State.CREATED
+    file.close()
+    assert file.closed
+    assert filepath.read_text() == WORLD
+    assert file.state == State.CREATED
+    assert tracker == [("pre", filepath), ("post", filepath)]
+
+
 def test_write_closed(filepath):
     """Writing a closed file shall raise an Exception."""
     file = open_(filepath)
@@ -241,6 +285,23 @@ def test_existing_error(filepath):
     assert file.state == State.CREATED
 
 
+def test_existing_error_pre_post(filepath, tracker, pre, post):
+    """existing=Existing.ERROR."""
+    # First
+    with open_(filepath, existing=Existing.ERROR, pre=pre, post=post) as file:
+        file.write(WORLD)
+    assert file.state == State.CREATED
+    assert tracker == [("pre", filepath), ("post", filepath)]
+
+    # Failing second
+    with raises(FileExistsError):
+        with open_(filepath, existing=Existing.ERROR, pre=pre, post=post) as file:
+            file.write(MARS)
+    assert filepath.read_text() == WORLD
+    assert file.state == State.CREATED
+    assert tracker == [("pre", filepath), ("post", filepath)]
+
+
 def test_existing_keep(filepath):
     """existing=Existing.KEEP."""
     # First
@@ -253,6 +314,24 @@ def test_existing_keep(filepath):
         file.write(MARS)
     assert filepath.read_text() == WORLD
     assert file.state == State.EXISTING
+
+
+def test_existing_keep_pre_post(filepath, tracker, pre, post):
+    """existing=Existing.KEEP."""
+    # First
+    with open_(filepath, existing=Existing.KEEP, pre=pre, post=post) as file:
+        file.write(WORLD)
+        assert tracker == [("pre", filepath)]
+
+    assert file.state == State.CREATED
+    assert tracker == [("pre", filepath), ("post", filepath)]
+
+    # Second, ignored.
+    with open_(filepath, existing=Existing.KEEP, pre=pre, post=post) as file:
+        file.write(MARS)
+    assert filepath.read_text() == WORLD
+    assert file.state == State.EXISTING
+    assert tracker == [("pre", filepath), ("post", filepath)]
 
 
 def test_existing_overwrite(filepath):
@@ -272,6 +351,29 @@ def test_existing_overwrite(filepath):
     assert not cmp_mtime(mtime, filepath.stat().st_mtime)
     assert filepath.read_text() == WORLD
     assert file.state == State.OVERWRITTEN
+
+
+def test_existing_overwrite_pre_post(filepath, tracker, pre, post):
+    """existing=Existing.OVERWRITE."""
+    # First Write
+    with open_(filepath, existing=Existing.OVERWRITE, pre=pre, post=post) as file:
+        file.write(WORLD)
+        assert tracker == [("pre", filepath)]
+    assert tracker == [("pre", filepath), ("post", filepath)]
+    mtime = filepath.stat().st_mtime
+    assert filepath.read_text() == WORLD
+    assert file.state == State.CREATED
+
+    time.sleep(SLEEP)
+
+    # Second Write
+    with open_(filepath, existing=Existing.OVERWRITE, pre=pre, post=post) as file:
+        file.write(WORLD)
+        assert tracker == [("pre", filepath), ("post", filepath), ("pre", filepath)]
+    assert not cmp_mtime(mtime, filepath.stat().st_mtime)
+    assert filepath.read_text() == WORLD
+    assert file.state == State.OVERWRITTEN
+    assert tracker == [("pre", filepath), ("post", filepath), ("pre", filepath), ("post", filepath)]
 
 
 def test_existing_overwrite_str(filepath):

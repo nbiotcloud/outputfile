@@ -110,6 +110,7 @@ from shutil import copyfile
 from typing import IO, Any, TypeAlias
 
 Diffout: TypeAlias = Callable[[str], None]
+Hookup: TypeAlias = Callable[[str | Path], None]
 
 __all__ = ["Existing", "OutputFile", "State", "open_"]
 
@@ -141,6 +142,8 @@ def open_(  # noqa: D417
     existing: Existing | str = Existing.KEEP_TIMESTAMP,
     mkdir: bool = False,
     diffout: Diffout | None = None,
+    pre: Hookup | None = None,
+    post: Hookup | None = None,
     **kwargs,
 ):
     """
@@ -175,6 +178,8 @@ def open_(  # noqa: D417
 
         mkdir: create the output directory if it not exists.
         diffout: function receiving file diff on update.
+        pre: Function called before opening or creating the file for write
+        post: Function called after writing
 
     Raises:
         FileExistsError: if `existing="error"` and file exists already.
@@ -182,7 +187,9 @@ def open_(  # noqa: D417
     Any keyword argument is simply bypassed to the `open` function,
     except `mode`, which is forced to `w`.
     """
-    return OutputFile(filepath, mode=mode, existing=existing, mkdir=mkdir, diffout=diffout, kwargs=kwargs)
+    return OutputFile(
+        filepath, mode=mode, existing=existing, mkdir=mkdir, diffout=diffout, pre=pre, post=post, kwargs=kwargs
+    )
 
 
 class OutputFile:
@@ -195,6 +202,8 @@ class OutputFile:
         existing: Existing | str = Existing.KEEP_TIMESTAMP,
         mkdir: bool = False,
         diffout=None,
+        pre: Hookup | None = None,
+        post: Hookup | None = None,
         kwargs=None,
     ) -> None:
         """File object returned by `open_`."""
@@ -209,6 +218,8 @@ class OutputFile:
         self.existing = existing
         self.mkdir = mkdir
         self.diffout = diffout
+        self.pre = pre
+        self.post = post
         self.__handle: IO[Any] | None = None
         self.__open_state: bool = False
         self.__state = State.FAILED
@@ -289,11 +300,13 @@ class OutputFile:
             self.__tmp_filepath = Path(tmp_filepath)
             self.__handle = _fdopen(file, mode, **opts)
         elif not self.__file_exists or existing != Existing.KEEP:
+            if self.pre:
+                self.pre(filepath)
             self.__handle = open(filepath, mode, **opts)  # noqa: PTH123
         self.__open_state = True
         self.__state = State.OPEN
 
-    def __close(self) -> None:
+    def __close(self) -> None:  # noqa: C901, PLR0912
         if self.__open_state:
             diff = None
             if self.__handle:
@@ -305,7 +318,11 @@ class OutputFile:
                         if not self.is_binary and self.diffout and is_modified is True:
                             diff = _get_diff(self.filepath, self.__tmp_filepath)
                         if is_modified is not False:
+                            if self.pre:
+                                self.pre(self.filepath)
                             copyfile(self.__tmp_filepath, self.filepath)
+                            if self.post:
+                                self.post(self.filepath)
                         self.__state = {
                             True: State.UPDATED,
                             False: State.IDENTICAL,
@@ -314,6 +331,8 @@ class OutputFile:
                     self.__tmp_filepath.unlink()
                     self.__tmp_filepath = None
                 elif self.__state != State.FAILED:  # pragma: no cover
+                    if self.post:
+                        self.post(self.filepath)
                     if self.__file_exists:
                         self.__state = State.OVERWRITTEN
                     else:
