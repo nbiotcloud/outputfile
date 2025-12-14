@@ -70,23 +70,27 @@ def tracker():
 
 
 @fixture
-def pre(tracker):
+def pre_post(tracker):
     """Pre."""
 
-    def func(filepath):
-        tracker.append(("pre", filepath))
+    def pre_create(filepath):
+        tracker.append(("pre_create", filepath))
 
-    return func
+    def post_create(filepath):
+        tracker.append(("post_create", filepath))
 
+    def pre_update(filepath):
+        tracker.append(("pre_update", filepath))
 
-@fixture
-def post(tracker):
-    """Post."""
+    def post_update(filepath):
+        tracker.append(("post_update", filepath))
 
-    def func(filepath):
-        tracker.append(("post", filepath))
-
-    return func
+    return {
+        "pre_create": pre_create,
+        "post_create": post_create,
+        "pre_update": pre_update,
+        "post_update": post_update,
+    }
 
 
 def test_attrs(filepath):
@@ -162,6 +166,52 @@ def test_update(filepath):
     assert changes == ["--- \n+++ \n@@ -1,2 +1,2 @@\n \n-Hello Mars.\n+Hello World.\n"]
 
 
+def test_update_pre_post(filepath, tracker, pre_post):
+    """Every content change has to trigger a file update."""
+    # First Write
+    with open_(filepath, **pre_post) as file:
+        file.write(WORLD)
+    mtime = filepath.stat().st_mtime
+    assert filepath.read_text() == WORLD
+    assert file.state == State.CREATED
+    assert tracker == [
+        ("pre_create", filepath),
+        ("post_create", filepath),
+    ]
+
+    time.sleep(SLEEP)
+
+    # Second Write
+    with open_(filepath, **pre_post) as file:
+        file.write(MARS)
+    assert not cmp_mtime(mtime, filepath.stat().st_mtime)
+    assert filepath.read_text() == MARS
+    assert file.state == State.UPDATED
+    assert tracker == [
+        ("pre_create", filepath),
+        ("post_create", filepath),
+        ("pre_update", filepath),
+        ("post_update", filepath),
+    ]
+
+    time.sleep(SLEEP)
+
+    # Third Write
+    with open_(filepath, **pre_post) as file:
+        file.write(WORLD)
+    assert not cmp_mtime(mtime, filepath.stat().st_mtime)
+    assert filepath.read_text() == WORLD
+    assert file.state == State.UPDATED
+    assert tracker == [
+        ("pre_create", filepath),
+        ("post_create", filepath),
+        ("pre_update", filepath),
+        ("post_update", filepath),
+        ("pre_update", filepath),
+        ("post_update", filepath),
+    ]
+
+
 def test_update_singleline(filepath):
     """Content without newline and fast."""
     with open_(filepath) as file:
@@ -228,22 +278,22 @@ def test_close(filepath):
     assert file.state == State.CREATED
 
 
-def test_close_pre_post(filepath, tracker, pre, post):
+def test_close_pre_post(filepath, tracker, pre_post):
     """Test OutputFile with explicit close()."""
-    file = open_(filepath, pre=pre, post=post)
+    file = open_(filepath, **pre_post)
     assert tracker == []
     file.write(WORLD)
     assert file.state == State.OPEN
     assert not file.closed
     file.close()
-    assert tracker == [("pre", filepath), ("post", filepath)]
+    assert tracker == [("pre_create", filepath), ("post_create", filepath)]
     assert file.closed
     assert file.state == State.CREATED
     file.close()
     assert file.closed
     assert filepath.read_text() == WORLD
     assert file.state == State.CREATED
-    assert tracker == [("pre", filepath), ("post", filepath)]
+    assert tracker == [("pre_create", filepath), ("post_create", filepath)]
 
 
 def test_write_closed(filepath):
@@ -285,21 +335,21 @@ def test_existing_error(filepath):
     assert file.state == State.CREATED
 
 
-def test_existing_error_pre_post(filepath, tracker, pre, post):
+def test_existing_error_pre_post(filepath, tracker, pre_post):
     """existing=Existing.ERROR."""
     # First
-    with open_(filepath, existing=Existing.ERROR, pre=pre, post=post) as file:
+    with open_(filepath, existing=Existing.ERROR, **pre_post) as file:
         file.write(WORLD)
     assert file.state == State.CREATED
-    assert tracker == [("pre", filepath), ("post", filepath)]
+    assert tracker == [("pre_create", filepath), ("post_create", filepath)]
 
     # Failing second
     with raises(FileExistsError):
-        with open_(filepath, existing=Existing.ERROR, pre=pre, post=post) as file:
+        with open_(filepath, existing=Existing.ERROR, **pre_post) as file:
             file.write(MARS)
     assert filepath.read_text() == WORLD
     assert file.state == State.CREATED
-    assert tracker == [("pre", filepath), ("post", filepath)]
+    assert tracker == [("pre_create", filepath), ("post_create", filepath)]
 
 
 def test_existing_keep(filepath):
@@ -316,22 +366,22 @@ def test_existing_keep(filepath):
     assert file.state == State.EXISTING
 
 
-def test_existing_keep_pre_post(filepath, tracker, pre, post):
+def test_existing_keep_pre_post(filepath, tracker, pre_post):
     """existing=Existing.KEEP."""
     # First
-    with open_(filepath, existing=Existing.KEEP, pre=pre, post=post) as file:
+    with open_(filepath, existing=Existing.KEEP, **pre_post) as file:
         file.write(WORLD)
-        assert tracker == [("pre", filepath)]
+        assert tracker == [("pre_create", filepath)]
 
     assert file.state == State.CREATED
-    assert tracker == [("pre", filepath), ("post", filepath)]
+    assert tracker == [("pre_create", filepath), ("post_create", filepath)]
 
     # Second, ignored.
-    with open_(filepath, existing=Existing.KEEP, pre=pre, post=post) as file:
+    with open_(filepath, existing=Existing.KEEP, **pre_post) as file:
         file.write(MARS)
     assert filepath.read_text() == WORLD
     assert file.state == State.EXISTING
-    assert tracker == [("pre", filepath), ("post", filepath)]
+    assert tracker == [("pre_create", filepath), ("post_create", filepath)]
 
 
 def test_existing_overwrite(filepath):
@@ -353,13 +403,13 @@ def test_existing_overwrite(filepath):
     assert file.state == State.OVERWRITTEN
 
 
-def test_existing_overwrite_pre_post(filepath, tracker, pre, post):
+def test_existing_overwrite_pre_post(filepath, tracker, pre_post):
     """existing=Existing.OVERWRITE."""
     # First Write
-    with open_(filepath, existing=Existing.OVERWRITE, pre=pre, post=post) as file:
+    with open_(filepath, existing=Existing.OVERWRITE, **pre_post) as file:
         file.write(WORLD)
-        assert tracker == [("pre", filepath)]
-    assert tracker == [("pre", filepath), ("post", filepath)]
+        assert tracker == [("pre_create", filepath)]
+    assert tracker == [("pre_create", filepath), ("post_create", filepath)]
     mtime = filepath.stat().st_mtime
     assert filepath.read_text() == WORLD
     assert file.state == State.CREATED
@@ -367,13 +417,18 @@ def test_existing_overwrite_pre_post(filepath, tracker, pre, post):
     time.sleep(SLEEP)
 
     # Second Write
-    with open_(filepath, existing=Existing.OVERWRITE, pre=pre, post=post) as file:
+    with open_(filepath, existing=Existing.OVERWRITE, **pre_post) as file:
         file.write(WORLD)
-        assert tracker == [("pre", filepath), ("post", filepath), ("pre", filepath)]
+        assert tracker == [("pre_create", filepath), ("post_create", filepath), ("pre_update", filepath)]
     assert not cmp_mtime(mtime, filepath.stat().st_mtime)
     assert filepath.read_text() == WORLD
     assert file.state == State.OVERWRITTEN
-    assert tracker == [("pre", filepath), ("post", filepath), ("pre", filepath), ("post", filepath)]
+    assert tracker == [
+        ("pre_create", filepath),
+        ("post_create", filepath),
+        ("pre_update", filepath),
+        ("post_update", filepath),
+    ]
 
 
 def test_existing_overwrite_str(filepath):
@@ -417,6 +472,7 @@ def test_mode_text(filepath, mode, diffout, capsys):
     assert not capsys.readouterr().out
     with open_(filepath, mode=mode, diffout=diffout) as file:
         file.write(MARS)
+    assert file.mode in ("w", "wt")
     assert filepath.read_text() == MARS
     diff = "--- \n+++ \n@@ -1,2 +1,2 @@\n \n-Hello World.\n+Hello Mars.\n\n" if diffout else ""
     assert capsys.readouterr().out == diff
@@ -434,6 +490,7 @@ def test_mode_binary(filepath, mode, diffout, capsys):
     assert file.state == State.CREATED
     with open_(filepath, mode=mode, diffout=diffout) as file:
         file.write(OTHERBYTES)
+    assert file.mode == "wb"
     assert filepath.read_bytes() == OTHERBYTES
     assert not capsys.readouterr().out
     assert file.state == State.UPDATED
