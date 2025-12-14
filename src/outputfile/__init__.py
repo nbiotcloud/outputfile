@@ -112,7 +112,7 @@ from typing import IO, Any, TypeAlias
 Diffout: TypeAlias = Callable[[str], None]
 Hookup: TypeAlias = Callable[[str | Path], None]
 
-__all__ = ["Existing", "OutputFile", "State", "open_"]
+__all__ = ["Diffout", "Existing", "Hookup", "OutputFile", "State", "open_"]
 
 
 class Existing(Enum):
