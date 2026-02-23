@@ -707,9 +707,6 @@ wheels = [
 [[package]]
 name = "outputfile"
 source = { editable = "." }
-dependencies = [
-    { name = "mkdocstrings" },
-]
 
 [package.dev-dependencies]
 dev = [
@@ -719,6 +716,7 @@ dev = [
     { name = "mkdocs-include-markdown-plugin" },
     { name = "mkdocs-literate-nav" },
     { name = "mkdocs-material" },
+    { name = "mkdocstrings" },
     { name = "mkdocstrings-python" },
     { name = "mypy" },
     { name = "pre-commit" },
@@ -728,7 +726,6 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "mkdocstrings", specifier = "<1.0.0" }]
 
 [package.metadata.requires-dev]
 dev = [
@@ -738,6 +735,7 @@ dev = [
     { name = "mkdocs-include-markdown-plugin", specifier = ">=6.0.5" },
     { name = "mkdocs-literate-nav", specifier = ">=0.6.1" },
     { name = "mkdocs-material", specifier = ">=9.5.18" },
+    { name = "mkdocstrings", specifier = "<1.0.0" },
     { name = "mkdocstrings-python", specifier = ">=1.9.2" },
     { name = "mypy", specifier = ">=1.9.0" },
     { name = "pre-commit", specifier = ">=4.1.0" },
