@@ -530,9 +530,10 @@ def test_existing_check_missing(filepath):
         file.write(WORLD)
     assert file.state == State.FAILED
 
+
 def test_existing_check_content(filepath):
     """existing=Existing.CHECK file content."""
-    with open(filepath, 'w') as file:
+    with filepath.open("w") as file:
         file.write(MARS)
 
     with open_(filepath, existing=Existing.CHECK) as file:
