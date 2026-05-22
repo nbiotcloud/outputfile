@@ -522,3 +522,25 @@ def test_permission_error(filepath, existing):
     with raises(PermissionError):
         with open_(filepath, existing=existing) as file:
             file.write("test")
+
+
+def test_existing_check_missing(filepath):
+    """existing=Existing.CHECK file missing."""
+    with open_(filepath, existing=Existing.CHECK) as file:
+        file.write(WORLD)
+    assert file.state == State.FAILED
+
+def test_existing_check_content(filepath):
+    """existing=Existing.CHECK file content."""
+    with open(filepath, 'w') as file:
+        file.write(MARS)
+
+    with open_(filepath, existing=Existing.CHECK) as file:
+        file.write(MARS)
+    assert filepath.read_text() == MARS
+    assert file.state == State.IDENTICAL
+
+    with open_(filepath, existing=Existing.CHECK) as file:
+        file.write(WORLD)
+    assert filepath.read_text() == MARS
+    assert file.state == State.FAILED

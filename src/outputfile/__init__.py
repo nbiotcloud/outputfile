@@ -122,6 +122,7 @@ class Existing(Enum):
     KEEP = "keep"
     OVERWRITE = "overwrite"
     KEEP_TIMESTAMP = "keep_timestamp"
+    CHECK = "check"
 
 
 class State(Enum):
@@ -312,7 +313,7 @@ class OutputFile:
             else:
                 raise FileNotFoundError(f"Output directory '{filedir!s}' does not exists.")
         # open
-        if existing == Existing.KEEP_TIMESTAMP:
+        if existing in (Existing.KEEP_TIMESTAMP, Existing.CHECK):
             file, tmp_filepath = tempfile.mkstemp()
             self.__tmp_filepath = Path(tmp_filepath)
             self.__handle = _fdopen(file, mode, **opts)
@@ -333,28 +334,34 @@ class OutputFile:
             if self.__handle:
                 self.__handle.flush()
                 self.__handle.close()
-                if self.existing == Existing.KEEP_TIMESTAMP and self.__tmp_filepath:
+                if self.existing in (Existing.KEEP_TIMESTAMP, Existing.CHECK) and self.__tmp_filepath:
                     if self.__state != State.FAILED:
                         is_modified = _is_modified(self.filepath, self.__tmp_filepath)
                         if not self.is_binary and self.diffout and is_modified is True:
                             diff = _get_diff(self.filepath, self.__tmp_filepath)
-                        if is_modified is None:
-                            if self.pre_create:
-                                self.pre_create(self.filepath)
-                            copyfile(self.__tmp_filepath, self.filepath)
-                            if self.post_create:
-                                self.post_create(self.filepath)
-                        elif is_modified:
-                            if self.pre_update:
-                                self.pre_update(self.filepath)
-                            copyfile(self.__tmp_filepath, self.filepath)
-                            if self.post_update:
-                                self.post_update(self.filepath)
-                        self.__state = {
-                            True: State.UPDATED,
-                            False: State.IDENTICAL,
-                            None: State.CREATED,
-                        }[is_modified]
+                        if self.existing == Existing.CHECK:
+                            if is_modified in (True, None):
+                                self.__state = State.FAILED
+                            else:
+                                self.__state = State.IDENTICAL
+                        else:
+                            if is_modified is None:
+                                if self.pre_create:
+                                    self.pre_create(self.filepath)
+                                copyfile(self.__tmp_filepath, self.filepath)
+                                if self.post_create:
+                                    self.post_create(self.filepath)
+                            elif is_modified:
+                                if self.pre_update:
+                                    self.pre_update(self.filepath)
+                                copyfile(self.__tmp_filepath, self.filepath)
+                                if self.post_update:
+                                    self.post_update(self.filepath)
+                            self.__state = {
+                                True: State.UPDATED,
+                                False: State.IDENTICAL,
+                                None: State.CREATED,
+                            }[is_modified]
                     self.__tmp_filepath.unlink()
                     self.__tmp_filepath = None
                 elif self.__state != State.FAILED:  # pragma: no cover
